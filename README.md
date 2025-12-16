@@ -45,6 +45,10 @@ Replace the placeholders:
 - `$OUTPUT_DIR`: Directory to save the output.
 - `$GDRIVE_API_KEY`: Google Drive API key for accessing data.
 
+## Important notes
+
+It is crucial that models (endpoints) are trained on **exactly** the same RDKit version that was used to store the Enamine fingerprints in Google Drive, using the same ECFP6 count fingerprints (radius 3, 2048 bits).
+
 ## About the Ersilia Open Source Initiative
 
 The [Ersilia Open Source Initiative](https://ersilia.io) is a tech nonprofit organization dedicated to advancing sustainable research in the Global South. Their flagship resource, the [Ersilia Model Hub](https://github.com/ersilia-os/ersilia), is an open-source repository of AI/ML models designed for antimicrobial drug discovery.
