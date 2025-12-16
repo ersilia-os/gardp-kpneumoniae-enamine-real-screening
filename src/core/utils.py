@@ -1,15 +1,15 @@
 import os
 import h5py
-import shutil
+import pandas as pd
 import numpy as np
 
 
 def _get_data_file(dir_path, chunk_name):
-    return os.path.join(dir_path, f"{chunk_name}.npz")
+    return os.path.join(dir_path, f"{chunk_name}_X.npz")
 
 
 def _get_identifiers_file(dir_path, chunk_name):
-    return os.path.join(dir_path, f"{chunk_name}_XXXXXXX.xxx") # TODO Arnau: replace with actual extension
+    return os.path.join(dir_path, f"{chunk_name}_SMILES_IDs.csv.zst")
 
 
 def _get_h5_file(dir_path, chunk_name):
@@ -41,12 +41,12 @@ def convert_to_h5(dir_path, chunk_name):
     data_file = _get_data_file(dir_path, chunk_name)
     identifiers_file = _get_identifiers_file(dir_path, chunk_name)
     h5_file = _get_h5_file(dir_path, chunk_name)
-    X = np.load(data_file)['arr_0'] # TODO Arnau: adjust key if necessary
-    identifiers = np.load(identifiers_file)['arr_0'] # TODO Arnau: adjust loading method necessary
+    X = np.load(data_file)['X']
+    identifiers = pd.read_csv(identifiers_file)
     with h5py.File(h5_file, 'w') as f:
         f.create_dataset('values', data=X.astype("int8"))
-        f.create_dataset("key", data=identifiers[:,0].astype("S"))
-        f.create_dataset("input", data=identifiers[:,1].astype("S"))
+        f.create_dataset("key", data=np.array(identifiers["IDS"]).astype("S"))
+        f.create_dataset("input", data=np.array(identifiers["SMILES"]).astype("S"))
     return h5_file
 
 

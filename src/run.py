@@ -1,5 +1,4 @@
 import os
-import tempfile
 import argparse
 
 from core.core import LightScreener
@@ -18,12 +17,11 @@ def main():
     output_dir = args.output_dir
     gdrive_api_key = args.gdrive_api_key
 
-    tmp_dir = tempfile.mkdtemp(prefix="ersilia-")
-    download_data(chunk_name, tmp_dir, gdrive_api_key)
-    h5_file = convert_to_h5(chunk_name, tmp_dir)
+    download_data(output_dir, chunk_name, gdrive_api_key)
+    h5_file = convert_to_h5(output_dir, chunk_name)
     screener = LightScreener()
     screener.screen(h5_input=h5_file, csv_output=os.path.join(output_dir, f"{chunk_name}_hits.csv"))
-    clean_data(chunk_name, tmp_dir)
+    clean_data(output_dir, chunk_name)
 
 
 if __name__ == "__main__":
