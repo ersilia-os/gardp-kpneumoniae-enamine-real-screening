@@ -47,7 +47,7 @@ Replace the placeholders:
 
 ## Important notes
 
-It is crucial that models (endpoints) are trained on **exactly** the same RDKit version that was used to store the Enamine fingerprints in Google Drive, using the same ECFP6 count fingerprints (radius 3, 2048 bits).
+It is crucial that models (endpoints) are trained on **exactly** the same RDKit version (2025.09.1) that was used to store the Enamine fingerprints in Google Drive, using [the same](https://github.com/ersilia-os/ready-to-screen-enamine-real/blob/main/src/src.py) ECFP6 count featurization (radius 3, 2048 bits).
 
 ## About the Ersilia Open Source Initiative
 

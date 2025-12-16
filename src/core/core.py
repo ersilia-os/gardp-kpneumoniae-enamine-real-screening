@@ -3,11 +3,13 @@ import numpy as np
 import joblib
 import json
 import time
+import h5py
 import pandas as pd
 from tqdm import tqdm
 
 
 root = os.path.dirname(os.path.abspath(__file__))
+
 
 STRAINS = ["abaumannii", "kpneumoniae_nctc_13438", "kpneumoniae_atcc_43816"]
 CUTOFFS = ["bin", "perc01", "perc05", "perc1"]
@@ -60,31 +62,31 @@ class LightDecisionModel(object):
         self.keep = keep
         self.chunk_size = 1000000
 
-    def screen(self, X):
-        print(f"Screening with model: {self.name}")
+    def screen(self, h5_file, idxs):
+        print(f"Screening with model: {self.name} on H5 file {h5_file}")
+        if type(idxs) is list:
+            idxs = np.array(idxs, dtype="int")
         chunk_size = self.chunk_size
-        num_chunks = int(np.ceil(X.shape[0] / chunk_size))
-        y_hat = np.zeros(X.shape[0])
-        for i in tqdm(range(num_chunks)):
-            start_idx = i * chunk_size
-            end_idx = min((i + 1) * chunk_size, X.shape[0])
-            y_hat[start_idx:end_idx] = self.model.predict_proba(X[start_idx:end_idx])[:, 1]
-        y_hat = self.model.predict_proba(X)[:,1]
+        y_hat = np.zeros(len(idxs), dtype=np.float16)
+        with h5py.File(h5_file, "r") as f:
+            X = f["values"]
+            for i in tqdm(range(0, len(idxs), chunk_size)):
+                chunk_idxs = idxs[i:i+chunk_size]
+                X_chunk = X[chunk_idxs,:]
+                y_hat[i:i+len(chunk_idxs)] = self.model.predict_proba(X_chunk)[:, 1]
         print(f"Median predicted score: {np.median(y_hat)}, cutoff: {self.cutoff}")
         if self.keep:
             y_keep = y_hat >= self.cutoff
         else:
             y_keep = y_hat <= self.cutoff
+        print(f"Number of compounds kept: {np.sum(y_keep)} out of {len(y_keep)}")
         return y_keep
-    
-    def screen_h5(self, h5_file):
-
 
 
 class LightScreener(object):
 
     def __init__(self):
-        self.models_dir = os.path.join(root, "..", "..", "data", "endpoints")
+        self.models_dir = os.path.abspath(os.path.join(root, "..", "..", "data", "endpoints"))
         self.models = {}
         for endpoint in GARDP_ENDPOINTS + OTHER_ACTIVITY_ENDPOINTS + TRANSPORT_ENDPOINTS + TOXICITY_ENDPOINTS + ATTRACTIVENESS_ENDPOINTS:
             model = self._load_model(endpoint)
@@ -106,187 +108,172 @@ class LightScreener(object):
         return LightDecisionModel(name, model, cutoff, keep)
     
     def _get_identifiers(self, h5_file):
-        identifiers = None
-        return identifiers
+        with h5py.File(h5_file, "r") as f:
+            key_list = [x.decode("utf-8") for x in f["key"][:]]
+            smiles_list = [x.decode("utf-8") for x in f["input"][:]]
+        data = {
+            "key": key_list,
+            "smiles": smiles_list
+        }
+        return data
 
     def _screen(self, h5_file):
-
-        X_original = X.copy()
-
+        print("###########################################################")
+        print("Starting GARDP LightScreener...")
         t0 = time.time()
 
-        idxs = np.arange(len(X))
-        print("Initial number of compounds:", len(X))
+        idxs = np.arange(len(X), dtype="int")
+        print("- Initial number of compounds:", len(X))
 
         print("Cytotoxicity screening...")
         model = self.models["cytotoxicity"]
-        keep_mask = model.screen(X)
+        keep_mask = model.screen(h5_file, idxs)
         idxs = idxs[keep_mask]
-        X = X[keep_mask]
-        print("Number of compounds after cytotoxicity screening:", len(idxs))
+        print("- Number of compounds after cytotoxicity screening:", len(idxs))
 
         print("PAINS filter...")
         model = self.models["pains"]
-        keep_mask = model.screen(X)
+        keep_mask = model.screen(h5_file, idxs)
         idxs = idxs[keep_mask]
-        X = X[keep_mask]
-        print("Number of compounds after PAINS filter:", len(idxs))
+        print("- Number of compounds after PAINS filter:", len(idxs))
 
         print("Frequent hitters...")
         model = self.models["frequent_hitters"]
-        keep_mask = model.screen(X)
+        keep_mask = model.screen(h5_file, idxs)
         idxs = idxs[keep_mask]
-        X = X[keep_mask]
-        print("Number of compounds after frequent hitters filter:", len(idxs))
+        print("- Number of compounds after frequent hitters filter:", len(idxs))
 
         print("Collins similarity...")
         model = self.models["collins_abx"]
-        keep_mask = model.screen(X)
+        keep_mask = model.screen(h5_file, idxs)
         idxs = idxs[keep_mask]
-        X = X[keep_mask]
-        print("Number of compounds after Collins similarity filter:", len(idxs))
+        print("- Number of compounds after Collins similarity filter:", len(idxs))
 
         print("AntibioticDB similarity...")
         model = self.models["antibioticdb"]
-        keep_mask = model.screen(X)
+        keep_mask = model.screen(h5_file, idxs)
         idxs = idxs[keep_mask]
-        X = X[keep_mask]
-        print("Number of compounds after AntibioticDB similarity filter:", len(idxs))
+        print("- Number of compounds after AntibioticDB similarity filter:", len(idxs))
 
         print("Antibiotic resemblance...")
         model = self.models["abx_resemblance"]
-        keep_mask = model.screen(X)
+        keep_mask = model.screen(h5_file, idxs)
         idxs = idxs[keep_mask]
-        X = X[keep_mask]
-        print("Number of compounds after antibiotic resemblance filter:", len(idxs))
+        print("- Number of compounds after antibiotic resemblance filter:", len(idxs))
 
         print("Abaumannii GARDP screening with bin cutoff...")
         model = self.models["abaumannii_bin_full"]
-        keep_mask = model.screen(X)
+        keep_mask = model.screen(h5_file, idxs)
         idxs_abaumannii_bin_full = idxs[keep_mask]
-        print("Number of compounds kept for the A.baumannii bin full filter:", len(idxs_abaumannii_bin_full))
+        print("- Number of compounds kept for the A.baumannii bin full filter:", len(idxs_abaumannii_bin_full))
         idxs = idxs[~keep_mask]
-        X = X[~keep_mask]
-        print("Number of compounds left for testing...", len(idxs))
+        print("- Number of compounds left for testing...", len(idxs))
 
         print("Abaumannii GARDP screening with perc01 cutoff...")
         model = self.models["abaumannii_perc01_full"]
-        keep_mask = model.screen(X)
+        keep_mask = model.screen(h5_file, idxs)
         idxs_abaumannii_perc01_full = idxs[keep_mask]
-        print("Number of compounds kept for the A.baumannii perc01 full filter:", len(idxs_abaumannii_perc01_full))
+        print("- Number of compounds kept for the A.baumannii perc01 full filter:", len(idxs_abaumannii_perc01_full))
         idxs = idxs[~keep_mask]
-        X = X[~keep_mask]
-        print("Number of compounds left for testing...", len(idxs))
+        print("- Number of compounds left for testing...", len(idxs))
 
         print("Abaumannii GARDP screening with bin cutoff (attractive)...")
         model = self.models["abaumannii_bin_attractive"]
-        keep_mask = model.screen(X)
+        keep_mask = model.screen(h5_file, idxs)
         idxs_abaumannii_bin_attractive = idxs[keep_mask]
-        print("Number of compounds kept for the A.baumannii bin attractive filter:", len(idxs_abaumannii_bin_attractive))
+        print("- Number of compounds kept for the A.baumannii bin attractive filter:", len(idxs_abaumannii_bin_attractive))
         idxs = idxs[~keep_mask]
-        X = X[~keep_mask]
-        print("Number of compounds left for testing...", len(idxs))
+        print("- Number of compounds left for testing...", len(idxs))
 
         print("Abaumannii GARDP screening with perc01 cutoff (attractive)...")
         model = self.models["abaumannii_perc01_attractive"]
-        keep_mask = model.screen(X)
+        keep_mask = model.screen(h5_file, idxs)
         idxs_abaumannii_perc01_attractive = idxs[keep_mask]
-        print("Number of compounds kept for the A.baumannii perc01 attractive filter:", len(idxs_abaumannii_perc01_attractive))
+        print("- Number of compounds kept for the A.baumannii perc01 attractive filter:", len(idxs_abaumannii_perc01_attractive))
         idxs = idxs[~keep_mask]
-        X = X[~keep_mask]
-        print("Number of compounds left for testing...", len(idxs))
+        print("- Number of compounds left for testing...", len(idxs))
 
         print("Kpneumoniae NCTC13438 GARDP screening with bin cutoff...")
         model = self.models["kpneumoniae_nctc_13438_bin_full"]
-        keep_mask = model.screen(X)
+        keep_mask = model.screen(h5_file, idxs)
         idxs_kpneumoniae_nctc_13438_bin_full = idxs[keep_mask]
-        print("Number of compounds kept for the K.pneumoniae NCTC13438 bin full filter:", len(idxs_kpneumoniae_nctc_13438_bin_full))
+        print("- Number of compounds kept for the K.pneumoniae NCTC13438 bin full filter:", len(idxs_kpneumoniae_nctc_13438_bin_full))
         idxs = idxs[~keep_mask]
-        X = X[~keep_mask]
-        print("Number of compounds left for testing...", len(idxs))
+        print("- Number of compounds left for testing...", len(idxs))
 
         print("Kpneumoniae NCTC13438 GARDP screening with perc01 cutoff...")
         model = self.models["kpneumoniae_nctc_13438_perc01_full"]
-        keep_mask = model.screen(X)
+        keep_mask = model.screen(h5_file, idxs)
         idxs_kpneumoniae_nctc_13438_perc01_full = idxs[keep_mask]
-        print("Number of compounds kept for the K.pneumoniae NCTC13438 perc01 full filter:", len(idxs_kpneumoniae_nctc_13438_perc01_full))
+        print("- Number of compounds kept for the K.pneumoniae NCTC13438 perc01 full filter:", len(idxs_kpneumoniae_nctc_13438_perc01_full))
         idxs = idxs[~keep_mask]
-        X = X[~keep_mask]
-        print("Number of compounds left for testing...", len(idxs))
+        print("- Number of compounds left for testing...", len(idxs))
         
         print("Kpneumoniae NCTC13438 GARDP screening with bin cutoff (attractive)...")
         model = self.models["kpneumoniae_nctc_13438_bin_attractive"]
-        keep_mask = model.screen(X)
+        keep_mask = model.screen(h5_file, idxs)
         idxs_kpneumoniae_nctc_13438_bin_attractive = idxs[keep_mask]
-        print("Number of compounds kept for the K.pneumoniae NCTC13438 bin attractive filter:", len(idxs_kpneumoniae_nctc_13438_bin_attractive))
+        print("- Number of compounds kept for the K.pneumoniae NCTC13438 bin attractive filter:", len(idxs_kpneumoniae_nctc_13438_bin_attractive))
         idxs = idxs[~keep_mask]
-        X = X[~keep_mask]
-        print("Number of compounds left for testing...", len(idxs))
+        print("- Number of compounds left for testing...", len(idxs))
 
         print("Kpneumoniae NCTC13438 GARDP screening with perc01 cutoff (attractive)...")
         model = self.models["kpneumoniae_nctc_13438_perc01_attractive"]
-        keep_mask = model.screen(X)
+        keep_mask = model.screen(h5_file, idxs)
         idxs_kpneumoniae_nctc_13438_perc01_attractive = idxs[keep_mask]
-        print("Number of compounds kept for the K.pneumoniae NCTC13438 perc01 attractive filter:", len(idxs_kpneumoniae_nctc_13438_perc01_attractive))
+        print("- Number of compounds kept for the K.pneumoniae NCTC13438 perc01 attractive filter:", len(idxs_kpneumoniae_nctc_13438_perc01_attractive))
         idxs = idxs[~keep_mask]
-        X = X[~keep_mask]
-        print("Number of compounds left for testing...", len(idxs))
+        print("- Number of compounds left for testing...", len(idxs))
 
         print("#######################################################")
 
         print("Abaumannii GARDP screening with perc05 cutoff...")
         model = self.models["abaumannii_perc05_full"]
-        keep_mask = model.screen(X)
+        keep_mask = model.screen(h5_file, idxs)
         idxs_abaumannii_perc05_full = idxs[keep_mask]
-        print("Number of compounds kept for the A.baumannii perc05 full filter:", len(idxs_abaumannii_perc05_full))
+        print("- Number of compounds kept for the A.baumannii perc05 full filter:", len(idxs_abaumannii_perc05_full))
         idxs = idxs[~keep_mask]
-        X = X[~keep_mask]
-        print("Number of compounds left for testing...:", len(idxs))
+        print("- Number of compounds left for testing...:", len(idxs))
 
         print("Abaumannii GARDP screening with perc1 cutoff...")
         model = self.models["abaumannii_perc1_full"]
-        keep_mask = model.screen(X)
+        keep_mask = model.screen(h5_file, idxs)
         idxs_abaumannii_perc1_full = idxs[keep_mask]
-        print("Number of compounds kept for the A.baumannii perc1 full filter:", len(idxs_abaumannii_perc1_full))
+        print("- Number of compounds kept for the A.baumannii perc1 full filter:", len(idxs_abaumannii_perc1_full))
         idxs = idxs[~keep_mask]
-        X = X[~keep_mask]
-        print("Number of compounds left for testing...:", len(idxs))
+        print("- Number of compounds left for testing...:", len(idxs))
 
         print("Kpneumoniae NCTC13438 GARDP screening with perc05 cutoff...")
         model = self.models["kpneumoniae_nctc_13438_perc05_full"]
-        keep_mask = model.screen(X)
+        keep_mask = model.screen(h5_file, idxs)
         idxs_kpneumoniae_nctc_13438_perc05_full = idxs[keep_mask]
-        print("Number of compounds kept for the K.pneumoniae NCTC13438 perc05 full filter:", len(idxs_kpneumoniae_nctc_13438_perc05_full))
+        print("- Number of compounds kept for the K.pneumoniae NCTC13438 perc05 full filter:", len(idxs_kpneumoniae_nctc_13438_perc05_full))
         idxs = idxs[~keep_mask]
-        X = X[~keep_mask]
-        print("Number of compounds left for testing...:", len(idxs))
+        print("- Number of compounds left for testing...:", len(idxs))
         
         print("Kpneumoniae NCTC13438 GARDP screening with perc1 cutoff...")
         model = self.models["kpneumoniae_nctc_13438_perc1_full"]
-        keep_mask = model.screen(X)
+        keep_mask = model.screen(h5_file, idxs)
         idxs_kpneumoniae_nctc_13438_perc1_full = idxs[keep_mask]
-        print("Number of compounds kept for the K.pneumoniae NCTC13438 perc1 full filter:", len(idxs_kpneumoniae_nctc_13438_perc1_full))
+        print("- Number of compounds kept for the K.pneumoniae NCTC13438 perc1 full filter:", len(idxs_kpneumoniae_nctc_13438_perc1_full))
         idxs = idxs[~keep_mask]
-        X = X[~keep_mask]
-        print("Number of compounds left for testing...:", len(idxs))
+        print("- Number of compounds left for testing...:", len(idxs))
 
         print("Kpneumoniae ATCC43816 GARDP screening with bin cutoff...")
         model = self.models["kpneumoniae_atcc_43816_bin_full"]
-        keep_mask = model.screen(X)
+        keep_mask = model.screen(h5_file, idxs)
         idxs_kpneumoniae_atcc_43816_bin_full = idxs[keep_mask]
-        print("Number of compounds kept for the K.pneumoniae ATCC43816 bin full filter:", len(idxs_kpneumoniae_atcc_43816_bin_full))
+        print("- Number of compounds kept for the K.pneumoniae ATCC43816 bin full filter:", len(idxs_kpneumoniae_atcc_43816_bin_full))
         idxs = idxs[~keep_mask]
-        X = X[~keep_mask]
-        print("Number of compounds left for testing...", len(idxs))
+        print("- Number of compounds left for testing...", len(idxs))
 
         print("Kpneumoniae ATCC43816 GARDP screening with perc01 cutoff...")
         model = self.models["kpneumoniae_atcc_43816_perc01_full"]
-        keep_mask = model.screen(X)
+        keep_mask = model.screen(h5_file, idxs)
         idxs_kpneumoniae_atcc_43816_perc01_full = idxs[keep_mask]
-        print("Number of compounds kept for the K.pneumoniae ATCC43816 perc01 full filter:", len(idxs_kpneumoniae_atcc_43816_perc01_full))
+        print("- Number of compounds kept for the K.pneumoniae ATCC43816 perc01 full filter:", len(idxs_kpneumoniae_atcc_43816_perc01_full))
         idxs = idxs[~keep_mask]
-        X = X[~keep_mask]
-        print("Number of compounds left for testing...", len(idxs))
+        print("- Number of compounds left for testing...", len(idxs))
 
         idxs = []
         idxs += list(idxs_abaumannii_perc05_full)
@@ -296,43 +283,44 @@ class LightScreener(object):
         idxs += list(idxs_kpneumoniae_atcc_43816_bin_full)
         idxs += list(idxs_kpneumoniae_atcc_43816_perc01_full)
         idxs = sorted(idxs)
-        idxs = np.array(idxs)
-        X = X_original[idxs,:]
-        print("Compounds left for testing...")
+        idxs = np.array(idxs, dtype="int")
+        print("Compounds left for testing after GARDP screening:", len(idxs))
 
         print("#######################################################")
 
+        print("Other activity filters...")
+
+        print("Stokes E.coli filter...")
         model = self.models["stokes_ecoli"]
         keep_mask = model.screen(X)
         idxs_stokes_ecoli = idxs[keep_mask]
-        print("Number of compounds kept for the Stokes E.coli filter:", len(idxs_stokes_ecoli))
+        print("- Number of compounds kept for the Stokes E.coli filter:", len(idxs_stokes_ecoli))
         idxs = idxs[~keep_mask]
-        X = X[~keep_mask]
-        print("Number of compounds left for testing...", len(idxs))
+        print("- Number of compounds left for testing...", len(idxs))
 
+        print("Stokes A.baumannii filter...")
         model = self.models["stokes_abaumannii"]
         keep_mask = model.screen(X)
         idxs_stokes_abaumannii = idxs[keep_mask]
-        print("Number of compounds kept for the Stokes A.baumannii filter:", len(idxs_stokes_abaumannii))
+        print("- Number of compounds kept for the Stokes A.baumannii filter:", len(idxs_stokes_abaumannii))
         idxs = idxs[~keep_mask]
-        X = X[~keep_mask]
-        print("Number of compounds left for testing...", len(idxs))
+        print("- Number of compounds left for testing...", len(idxs))
 
+        print("Mol-E Gram-negative filter...")
         model = self.models["mole_gn"]
         keep_mask = model.screen(X)
         idxs_mole_gn = idxs[keep_mask]
-        print("Number of compounds kept for the Mole GN filter:", len(idxs_mole_gn))
+        print("- Number of compounds kept for the Mole GN filter:", len(idxs_mole_gn))
         idxs = idxs[~keep_mask]
-        X = X[~keep_mask]
-        print("Number of compounds left for testing...", len(idxs))
+        print("- Number of compounds left for testing...", len(idxs))
 
+        print("GNEProp TolC filter...")
         model = self.models["gneprop_tolc"]
         keep_mask = model.screen(X)
         idxs_gneprop_tolc = idxs[keep_mask]
-        print("Number of compounds kept for the GNEProp TolC filter:", len(idxs_gneprop_tolc))
+        print("- Number of compounds kept for the GNEProp TolC filter:", len(idxs_gneprop_tolc))
         idxs = idxs[~keep_mask]
-        X = X[~keep_mask]
-        print("Number of compounds left for testing...", len(idxs))
+        print("- Number of compounds left for testing...", len(idxs))
 
         idxs = []
         idxs += list(idxs_stokes_ecoli)
@@ -341,20 +329,17 @@ class LightScreener(object):
         idxs += list(idxs_gneprop_tolc)
         idxs = sorted(idxs)
         idxs = np.array(idxs)
-        X = X_original[idxs,:]
 
         print("####################################################") 
         model = self.models["entry_rules"]
-        keep_mask = model.screen(X)
+        keep_mask = model.screen(h5_file, idxs)
         idxs = idxs[keep_mask]
-        X = X[keep_mask]
-        print("Number of compounds after entry rules filter:", len(idxs))
+        print("- Number of compounds after entry rules filter:", len(idxs))
 
         model = self.models["gn_permeability_proxy"]
         keep_mask = model.screen(X)
         idxs = idxs[keep_mask]
-        X = X[keep_mask]
-        print("Number of compounds after GN permeability proxy filter:", len(idxs))
+        print("- Number of compounds after GN permeability proxy filter:", len(idxs))
 
         idxs = list(idxs)
         idxs += list(idxs_abaumannii_bin_full)
@@ -366,7 +351,9 @@ class LightScreener(object):
         idxs += list(idxs_kpneumoniae_nctc_13438_bin_attractive)
         idxs += list(idxs_kpneumoniae_nctc_13438_perc01_attractive)
         idxs = sorted(idxs)
+        idxs = np.array(idxs, dtype="int")
 
+        print("####################################################")
         print("Final number of compounds selected:", len(idxs))
         t1 = time.time()
         print(f"Total screening time: {t1 - t0:.2f} seconds")
@@ -374,8 +361,14 @@ class LightScreener(object):
         return idxs
     
     def screen(self, h5_input, csv_output):
-        identifiers = self._get_identifiers(h5_input)
+        identifiers_data = self._get_identifiers(h5_input)
         idxs = self._screen(h5_input)
-        df = pd.DataFrame(identifiers[idxs], columns=[])
+        smiles_list = [identifiers_data["smiles"][i] for i in idxs]
+        key_list = [identifiers_data["key"][i] for i in idxs]
+        df = pd.DataFrame({
+            "identifier": key_list,
+            "smiles": smiles_list
+        })
         df.to_csv(csv_output, index=False)
+        print(f"Results saved to {csv_output}")
 
