@@ -13,7 +13,7 @@ This repository is based on a screening effort done in collaboration with GARDP 
 
 Code in this repository does the following:
 
-1. It downloads a chunk of Enamine REAL containing 10M compounds alongside their ECFP6 fingerprints (already pre-calculated). These files are stored in Ersilia's Google Drive, so an API key is necessary to download these files. In total, there are about 1000 chunks, i.e. ~10B molecules.
+1. It downloads a chunk of Enamine REAL containing 10M compounds alongside their ECFP6 fingerprints (already pre-calculated). These files are stored in Ersilia's Google Drive, so a service file (JSON format) is necessary to download these files (see Important notes). In total, there are about 1000 chunks, i.e. ~10B molecules.
 
 2. A filtering of the chunk is performed using a pre-trained set of decision endpoints (see figure below).
 
@@ -37,17 +37,18 @@ pip install -r requirements.txt
 To run the pipeline, use the following command:
 
 ```bash
-python src/run.py --chunk_name $CHUNK_NAME --output_dir $OUTPUT_DIR --gdrive_api_key $GDRIVE_API_KEY
+python src/run.py --chunk_name $CHUNK_NAME --output_dir $OUTPUT_DIR
 ```
 
 Replace the placeholders:
 - `$CHUNK_NAME`: Name of the chunk to be screened.
 - `$OUTPUT_DIR`: Directory to save the output.
-- `$GDRIVE_API_KEY`: Google Drive API key for accessing data.
 
 ## Important notes
 
-It is crucial that models (endpoints) are trained on **exactly** the same RDKit version (2025.09.1) that was used to store the Enamine fingerprints in Google Drive, using [the same](https://github.com/ersilia-os/ready-to-screen-enamine-real/blob/main/src/src.py) ECFP6 count featurization (radius 3, 2048 bits).
+1. It is crucial that models (endpoints) are trained on **exactly** the same RDKit version (2025.09.1) that was used to store the Enamine fingerprints in Google Drive, using [the same](https://github.com/ersilia-os/ready-to-screen-enamine-real/blob/main/src/src.py) ECFP6 count featurization (radius 3, 2048 bits).
+
+2. To download files from Ersilia's Google Drive, please download the corresponding service file (named `service.json`) from [Platform - Shared Credentials](https://drive.google.com/drive/folders/1OPHVrMaRF_90IeQsOld74pqCsWY-s-vH) and save it in `data/service` under the same name.
 
 ## About the Ersilia Open Source Initiative
 

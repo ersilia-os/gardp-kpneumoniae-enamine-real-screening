@@ -1,4 +1,6 @@
 example
+data/service/service.json
+processed
 
 # Juypter
 .jupyter_ystore.db

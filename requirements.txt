@@ -4,3 +4,7 @@ pandas
 scikit-learn
 tqdm
 joblib
+httplib2==0.31.0
+google_api_python_client==2.185.0
+google_auth==2.41.1
+zstandard==0.25.0
