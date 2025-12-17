@@ -17,9 +17,9 @@ def main():
 
     download_data(output_dir, chunk_name)
     h5_file = convert_to_h5(output_dir, chunk_name)
-    screener = LightScreener()
-    screener.screen(h5_input=h5_file, csv_output=os.path.join(output_dir, f"{chunk_name}_hits.csv"))
-    clean_data(output_dir, chunk_name)
+    #screener = LightScreener()
+    #screener.screen(h5_input=h5_file, csv_output=os.path.join(output_dir, f"{chunk_name}_hits.csv"))
+    #clean_data(output_dir, chunk_name)
 
 
 if __name__ == "__main__":

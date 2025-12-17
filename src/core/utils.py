@@ -13,7 +13,7 @@ def _get_data_file(dir_path, chunk_name):
 
 
 def _get_identifiers_file(dir_path, chunk_name):
-    return os.path.join(dir_path, f"{chunk_name}_SMILES_IDs.csv.zst")
+    return os.path.join(dir_path, f"{chunk_name}_SMILES_IDs.csv.zip")
 
 
 def _get_h5_file(dir_path, chunk_name):
@@ -31,7 +31,7 @@ def check_exists(dir_path, chunk_name):
 def download_file(outfile):
     root = os.path.dirname(os.path.abspath(__file__))
     file = os.path.basename(outfile)
-    service_file = os.path.join(root, "..", "..", "data", "service", "service.json")
+    service_file = os.path.abspath(os.path.join(root, "..", "..", "data", "service", "service.json"))
     folder_id = "19x9yAUySBXgrHBE3gjGjHsomcLQuLQmL"
     creds = Credentials.from_service_account_file(service_file, scopes=["https://www.googleapis.com/auth/drive.readonly"])
     service = build("drive", "v3", credentials=creds)
@@ -73,7 +73,7 @@ def convert_to_h5(dir_path, chunk_name, batch_size=100_000):
     h5_file = _get_h5_file(dir_path, chunk_name)
     X_sparse = load_npz(data_file)   # csr_matrix
     n_rows, n_cols = X_sparse.shape
-    identifiers = pd.read_csv(identifiers_file)
+    identifiers = pd.read_csv(identifiers_file, compression="zip")
     print(len(identifiers), n_rows)
     assert len(identifiers) == n_rows, "Row mismatch between X and identifiers"
     with h5py.File(h5_file, "w") as f:
