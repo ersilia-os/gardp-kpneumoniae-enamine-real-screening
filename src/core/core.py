@@ -4,6 +4,7 @@ import joblib
 import json
 import time
 import h5py
+import collections
 import pandas as pd
 from tqdm import tqdm
 
@@ -48,7 +49,6 @@ ATTRACTIVENESS_ENDPOINTS = [
 
 
 KEEP_ENDPOINTS = GARDP_ENDPOINTS + OTHER_ACTIVITY_ENDPOINTS + TRANSPORT_ENDPOINTS
-
 DISCARD_ENDPOINTS = TOXICITY_ENDPOINTS + ATTRACTIVENESS_ENDPOINTS
 
 
@@ -62,7 +62,18 @@ class LightDecisionModel(object):
         self.keep = keep
         self.chunk_size = 1000000
 
-    def screen(self, h5_file, idxs):
+    def screen_X(self, X):
+        print(f"Screening with model: {self.name} on in-memory data")
+        y_hat = self.model.predict_proba(X)[:, 1]
+        print(f"Median predicted score: {np.median(y_hat)}, cutoff: {self.cutoff}")
+        if self.keep:
+            y_keep = y_hat >= self.cutoff
+        else:
+            y_keep = y_hat <= self.cutoff
+        print(f"Number of compounds kept: {np.sum(y_keep)} out of {len(y_keep)}")
+        return y_keep
+
+    def screen_h5(self, h5_file, idxs):
         print(f"Screening with model: {self.name} on H5 file {h5_file}")
         if type(idxs) is list:
             idxs = np.array(idxs, dtype="int")
@@ -116,14 +127,67 @@ class LightScreener(object):
             "smiles": smiles_list
         }
         return data
+    
+    def _select_by_cluster(self, h5_file, idxs, scores, n_hits):
+        assert len(idxs) == len(scores), "Length mismatch between idxs and scores"
+        assert len(idxs) >= n_hits, "Not enough compounds to select the requested number of hits"
+        print(f"Selecting top {n_hits} hits by cluster diversity...")
+        with h5py.File(h5_file, "r") as f:
+            X = f["values"][idxs,:]
+        # TODO get labels from clustering
+        labels = KMeans(n_clusters=n_hits, random_state=42, metric="euclidean").fit_predict(X)
+        df = pd.DataFrame({
+            "idx": idxs,
+            "label": labels,
+            "score": scores,
+        })
+        df = df.sort_values(by="score", ascending=False).reset_index(drop=True)
+        visited_labels = set()
+        selected_idxs = set()
+        while len(selected_idxs) < n_hits:
+            for _, row in df.iterrows():
+                label = row["label"]
+                idx = row["idx"]
+                if idx in selected_idxs:
+                    continue
+                if label not in visited_labels:
+                    visited_labels.add(label)
+                    selected_idxs.add(idx)
+                if len(selected_idxs) >= n_hits:
+                    break
+            visited_labels = set()
+                
+        selected_idxs = sorted(list(selected_idxs))
+        print(f"Selected {len(selected_idxs)} hits by cluster diversity.")
+        return selected_idxs
+    
+    def _score(self, h5_file, idxs):
+        print("############################################################")
+        print("Scoring compounds...")
+        print("This implies horizontal calculations across several models.")
+        print(f"Number of compounds to score: {len(idxs)}")
+        print("Loading compound data from H5 file...")
+        with h5py.File(h5_file, "r") as f:
+            X = f["values"][idxs,:]
+        t0 = time.time()
+        scores = {}
+        for endpoint, model in self.models.items():
+            print(f"Scoring with model: {endpoint}")
+            y_hat = model.model.predict_proba(X)[:, 1]
+            scores[endpoint] = y_hat
+
+        t1 = time.time()
+        print(f"Scoring completed in {t1 - t0:.2f} seconds.")
 
     def _screen(self, h5_file):
         print("###########################################################")
         print("Starting GARDP LightScreener...")
         t0 = time.time()
 
-        idxs = np.arange(len(X), dtype="int")
-        print("- Initial number of compounds:", len(X))
+        with h5py.File(h5_file, "r") as f:
+            n = f["values"].shape[0]
+        idxs = np.arange(n, dtype="int")
+        print("- Initial number of compounds:", len(idxs))
 
         print("Cytotoxicity screening...")
         model = self.models["cytotoxicity"]
@@ -360,9 +424,9 @@ class LightScreener(object):
         
         return idxs
     
-    def screen(self, h5_input, csv_output):
+    def screen(self, h5_input, csv_output, n_hits):
         identifiers_data = self._get_identifiers(h5_input)
-        idxs = self._screen(h5_input)
+        idxs = self._screen(h5_input, n_hits)
         smiles_list = [identifiers_data["smiles"][i] for i in idxs]
         key_list = [identifiers_data["key"][i] for i in idxs]
         df = pd.DataFrame({

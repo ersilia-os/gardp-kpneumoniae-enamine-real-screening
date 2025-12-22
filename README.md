@@ -21,6 +21,8 @@ Code in this repository does the following:
 
 ![Pipeline Overview](assets/Gardp_Screening_Enamine.png)
 
+A list of the models used in the screening can be found in [this spreadsheet](https://docs.google.com/spreadsheets/d/1mIS00AH0R1VWuuMx8BwCg9eCiZsMp_3lZq0IVe7xvTQ/edit?usp=sharing).
+
 ## Usage
 
 Clone this repository and create a Conda environment to install package requirements:
