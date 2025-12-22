@@ -1,4 +1,9 @@
+# Added manually
+dev.py
+dev_run.sh
+dev_test
 example
+config/service.json
 data/service/service.json
 processed
 
