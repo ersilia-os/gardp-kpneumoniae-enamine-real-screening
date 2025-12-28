@@ -9,7 +9,7 @@ from google.oauth2.service_account import Credentials
 from googleapiclient.discovery import build
 
 GDRIVE_FOLDER_ID = "1FBELagBf9hlKVgvkaZ8YF60jKRAmsHPo"
-ARRAY_DTYPE = "int8"
+ARRAY_DTYPE = np.int8
 
 
 def _get_data_file(dir_path, chunk_name):
@@ -22,6 +22,50 @@ def _get_identifiers_file(dir_path, chunk_name):
 
 def _get_h5_file(dir_path, chunk_name):
     return os.path.join(dir_path, f"{chunk_name}.h5")
+
+
+def _get_probas_h5_file(dir_path, chunk_name):
+    return os.path.join(dir_path, f"{chunk_name}_probas.h5")
+
+
+def _get_passed_h5_file(dir_path, chunk_name):
+    return os.path.join(dir_path, f"{chunk_name}_passed.h5")
+
+
+def _get_hits_csv(dir_path, chunk_name):
+    return os.path.join(dir_path, f"{chunk_name}_hits.csv")
+
+
+def _get_stats_json(dir_path, chunk_name):
+    return os.path.join(dir_path, f"{chunk_name}_stats.json")
+
+
+def get_filenames(dir_path, chunk_name):
+    data_file = _get_data_file(dir_path, chunk_name)
+    identifiers_file = _get_identifiers_file(dir_path, chunk_name)
+    h5_file = _get_h5_file(dir_path, chunk_name)
+    hits_csv = _get_hits_csv(dir_path, chunk_name)
+    stats_json = _get_stats_json(dir_path, chunk_name)
+    h5_probas_file = _get_probas_h5_file(dir_path, chunk_name)
+    passed_h5_file = _get_passed_h5_file(dir_path, chunk_name)
+
+    results = {
+        "data_file": data_file,
+        "identifiers_file": identifiers_file,
+        "h5_file": h5_file,
+        "hits_csv": hits_csv,
+        "stats_json": stats_json,
+        "h5_probas_file": h5_probas_file,
+        "h5_passed_file": passed_h5_file,
+    }
+
+    return results
+
+
+def get_endpoints_dir():
+    root = os.path.dirname(os.path.abspath(__file__))
+    endpoints_dir = os.path.abspath(os.path.join(root, "..", "data", "endpoints"))
+    return endpoints_dir
 
 
 def check_exists(dir_path, chunk_name):
@@ -103,12 +147,11 @@ def convert_to_h5(dir_path, chunk_name, batch_size=100_000):
 
 
 def clean_data(dir_path, chunk_name):
-    data_file = _get_data_file(dir_path, chunk_name)
-    identifiers_file = _get_identifiers_file(dir_path, chunk_name)
-    h5_file = _get_h5_file(dir_path, chunk_name)
-    if os.path.exists(data_file):
-        os.remove(data_file)
-    if os.path.exists(identifiers_file):
-        os.remove(identifiers_file)
-    if os.path.exists(h5_file):
-        os.remove(h5_file)
+    print("Cleaning up intermediate files...")
+    all_files = get_filenames(dir_path, chunk_name)
+    for _, v in all_files.items():
+        if v.endswith("_hits.csv") or v.endswith("_stats.json"):
+            continue
+        if os.path.exists(v):
+            print(f"Removing {v}...")
+            os.remove(v)

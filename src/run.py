@@ -1,7 +1,6 @@
-import os
 import argparse
 
-from core.core import LightScreener
+from core.core import pipeline
 from core.utils import download_data, convert_to_h5, clean_data
 
 
@@ -16,10 +15,8 @@ def main():
     output_dir = args.output_dir
 
     #download_data(output_dir, chunk_name)
-    #h5_file = convert_to_h5(output_dir, chunk_name)
-    h5_file = os.path.join(output_dir, f"{chunk_name}.h5") # TODO remove when debugged
-    screener = LightScreener()
-    screener.screen(h5_input=h5_file, csv_output=os.path.join(output_dir, f"{chunk_name}_hits.csv"))
+    #convert_to_h5(output_dir, chunk_name)
+    pipeline(output_dir, chunk_name)
     #clean_data(output_dir, chunk_name)
 
 
