@@ -14,10 +14,10 @@ def main():
     chunk_name = args.chunk_name
     output_dir = args.output_dir
 
-    #download_data(output_dir, chunk_name)
-    #convert_to_h5(output_dir, chunk_name)
+    download_data(output_dir, chunk_name)
+    convert_to_h5(output_dir, chunk_name)
     pipeline(output_dir, chunk_name)
-    #clean_data(output_dir, chunk_name)
+    clean_data(output_dir, chunk_name)
 
 
 if __name__ == "__main__":

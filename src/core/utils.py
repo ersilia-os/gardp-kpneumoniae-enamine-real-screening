@@ -64,7 +64,7 @@ def get_filenames(dir_path, chunk_name):
 
 def get_endpoints_dir():
     root = os.path.dirname(os.path.abspath(__file__))
-    endpoints_dir = os.path.abspath(os.path.join(root, "..", "data", "endpoints"))
+    endpoints_dir = os.path.abspath(os.path.join(root, "..", "..", "data", "endpoints"))
     return endpoints_dir
 
 
