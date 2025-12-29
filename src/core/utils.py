@@ -119,6 +119,20 @@ def download_data(dir_path, chunk_name):
     print(f"Download completed in {t1 - t0:.2f} seconds.")
 
 
+def copy_data(from_dir, output_dir, chunk_name):
+    if not os.path.exists(output_dir):
+        os.makedirs(output_dir)
+    data_file_src = _get_data_file(from_dir, chunk_name)
+    identifiers_file_src = _get_identifiers_file(from_dir, chunk_name)
+    data_file_dst = _get_data_file(output_dir, chunk_name)
+    identifiers_file_dst = _get_identifiers_file(output_dir, chunk_name)
+    print(f"Copying {data_file_src} to {data_file_dst}...")
+    os.system(f"cp {data_file_src} {data_file_dst}")
+    print(f"Copying {identifiers_file_src} to {identifiers_file_dst}...")
+    os.system(f"cp {identifiers_file_src} {identifiers_file_dst}")
+    print("Done with copying to output directory.")
+
+
 def convert_to_h5(dir_path, chunk_name, batch_size=100_000):
     t0 = time.time()
     print(f"Converting chunk {chunk_name} to H5 format...")
