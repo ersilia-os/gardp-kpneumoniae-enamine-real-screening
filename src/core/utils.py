@@ -1,4 +1,6 @@
 import os
+import io
+import sys
 import h5py
 import time
 import httplib2
@@ -7,6 +9,9 @@ import numpy as np
 from tqdm import tqdm
 from google.oauth2.service_account import Credentials
 from googleapiclient.discovery import build
+from googleapiclient.http import MediaIoBaseDownload
+from google_auth_httplib2 import AuthorizedHttp
+from googleapiclient.errors import HttpError
 
 GDRIVE_FOLDER_ID = "1FBELagBf9hlKVgvkaZ8YF60jKRAmsHPo"
 ARRAY_DTYPE = np.int8
@@ -83,22 +88,40 @@ def download_file(outfile):
     service_file = os.path.abspath(os.path.join(root, "..", "..", "config", "service.json"))
     folder_id = GDRIVE_FOLDER_ID
     creds = Credentials.from_service_account_file(service_file, scopes=["https://www.googleapis.com/auth/drive.readonly"])
-    service = build("drive", "v3", credentials=creds)
-    httplib2.DEFAULT_TIMEOUT = 600
-
-    query = f"name='{file}' and '{folder_id}' in parents and trashed=false"
-    results = service.files().list(q=query, fields="files(id)", supportsAllDrives=True, includeItemsFromAllDrives=True).execute()
+    for attempt in range(10):
+        try:
+            http = httplib2.Http(timeout=600)
+            authed_http = AuthorizedHttp(creds, http=http)
+            service = build("drive", "v3", http=authed_http)
+            query = f"name='{file}' and '{folder_id}' in parents and trashed=false"
+            results = service.files().list(q=query, fields="files(id)", supportsAllDrives=True, includeItemsFromAllDrives=True).execute()
+            break
+        except (HttpError, OSError):
+            time.sleep(5)
+            if attempt == 9:
+                raise
     files = results.get("files", [])
     if not files:
-        raise FileNotFoundError(f"'{file}' not found! Consider checking available chunks in data/chunks/chunks.csv")
+        raise FileNotFoundError(f"'{file}' not found in folder {folder_id}. Consider checking available chunks in data/chunks/chunks.csv")
     if len(files) > 1:
-        raise RuntimeError(
-            f"Multiple files named '{file}' are found...")
-
+        raise RuntimeError(f"Multiple files named '{file}' are found...")
     file_id = files[0]["id"]
     request = service.files().get_media(fileId=file_id, supportsAllDrives=True)
-    with open(outfile, "wb") as f:
-        f.write(request.execute())
+    with io.FileIO(outfile, "wb") as fh:
+        downloader = MediaIoBaseDownload(fh, request,chunksize=100 * 1024 * 1024)  # 100 MB chunks
+        done = False
+        retries = 0
+        while not done:
+            try:
+                status, done = downloader.next_chunk()
+                if status:
+                    print(f"Download {int(status.progress() * 100)}%\n")
+            except (HttpError, OSError):
+                retries += 1
+                print(f"Error found when downloading file. Trying again...[{retries}/10]")
+                if retries >= 10:
+                    raise
+                time.sleep(10)
 
 
 def download_data(dir_path, chunk_name):

@@ -141,7 +141,7 @@ class ScreenerArtifact(object):
         print(f"Endpoint {self.endpoint}: Passed {np.sum(y_bin)} out of {len(y_bin)} compounds. Strict passes = {n_pass}.")
 
 
-def fps_iterator(h5_file, chunksize=1_000_000):
+def fps_iterator(h5_file, chunksize=500_000):
     with h5py.File(h5_file, "r") as h5_file:
         n_fps = h5_file["values"].shape[0]
         for start in range(0, n_fps, chunksize):
