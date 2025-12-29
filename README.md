@@ -50,7 +50,7 @@ Replace the placeholders:
 
 1. It is crucial that models (endpoints) are trained on **exactly** the same RDKit version (2025.09.1) that was used to store the Enamine fingerprints in Google Drive, using [the same](https://github.com/ersilia-os/ready-to-screen-enamine-real/blob/main/src/src.py) ECFP6 count featurization (radius 3, 2048 bits).
 
-2. To download files from Ersilia's Google Drive, please download the corresponding service file (named `service.json`) from [Platform - Shared Credentials](https://drive.google.com/drive/folders/1OPHVrMaRF_90IeQsOld74pqCsWY-s-vH) and save it in `data/service` under the same name.
+2. To download files from Ersilia's Google Drive, please download the corresponding service file (named `service.json`) from [Platform - Shared Credentials](https://drive.google.com/drive/folders/1OPHVrMaRF_90IeQsOld74pqCsWY-s-vH) and save it in `config` under the same name.
 
 ## About the Ersilia Open Source Initiative
 
