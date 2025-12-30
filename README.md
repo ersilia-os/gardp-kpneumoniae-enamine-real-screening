@@ -13,7 +13,7 @@ This repository is based on a screening effort done in collaboration with GARDP 
 
 Code in this repository does the following:
 
-1. It downloads a chunk of Enamine REAL containing 10M compounds alongside their ECFP6 fingerprints (already pre-calculated). These files are stored in Ersilia's Google Drive, so a service file (JSON format) is necessary to download them (see Important notes). In total, there are about 1000 chunks, i.e. ~10B molecules. Chunk identifiers can be found in [this file](data/chunks/chunks.csv).
+1. It downloads a chunk of Enamine REAL containing 10M compounds alongside their ECFP6 fingerprints (already pre-calculated). These files are stored in Ersilia's Google Drive, so a service file (JSON format) is necessary to download these files (see Important notes). In total, there are about 1000 chunks, i.e. ~10B molecules. the chunk identifiers can be found in [this file](data/chunks/chunks.csv).
 
 2. A filtering of the chunk is performed using a pre-trained set of decision endpoints (see figure below).
 
@@ -51,6 +51,8 @@ Optionally, you can skip downloading by providing a folder containing local copi
 ```bash
 python src/run.py --chunk_name $CHUNK_NAME --output_dir $OUTPUT_DIR --from_dir $FROM_DIR
 ```
+
+Finally, you can skip the cleanup of intermediate files by using the `--skip_clean` flag.
 
 ## Important notes
 
